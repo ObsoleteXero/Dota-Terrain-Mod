@@ -1,29 +1,44 @@
-use winreg::RegKey;
+use regex::Regex;
+use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use std::fs::File;
-use regex::Regex;
-use std::error::Error;
+use winreg::RegKey;
 
-fn get_steam_path() -> Result<String, Box<dyn Error>> {
-    let hkcu = RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    let steam_key = hkcu.open_subkey("Software\\Valve\\Steam")?;
-    let steam_path: String = steam_key.get_value("SteamPath")?;
-    Ok(steam_path)
+enum TMError {
+    SteamNotFound,
+    DotaNotFound,
+    UnknownError,
 }
 
-pub fn get_dota_path() -> Result<PathBuf, Box<dyn Error>> {
-    let steam_path: String;
-    match get_steam_path() {
-        Ok(path) => steam_path = path,
-        Err(_) => return Err("Steam Installation not found.")?,
-    }
+pub enum Terrains {
+    Img,
+}
 
-    let library_folders = Path::new(&steam_path).join("steamapps").join("libraryfolders.vdf");
-    let mut lib_file = File::open(&library_folders)?;
+fn get_steam_path() -> Result<String, TMError> {
+    let hkcu = RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    match hkcu.open_subkey("Software\\Valve\\Steam") {
+        Ok(steam_key) => match steam_key.get_value("SteamPath") {
+            Ok(steam_path) => Ok(steam_path),
+            Err(_) => Err(TMError::SteamNotFound),
+        },
+        Err(_) => Err(TMError::SteamNotFound),
+    }
+}
+
+fn get_dota_path() -> Result<PathBuf, TMError> {
+    let steam_path = get_steam_path()?;
+
+    let library_folders = Path::new(&steam_path)
+        .join("steamapps")
+        .join("libraryfolders.vdf");
+
+    let mut lib_file = match File::open(&library_folders) {
+        Ok(file) => file,
+        Err(_) => return Err(TMError::UnknownError),
+    };
     let mut lib_file_text = String::new();
-    lib_file.read_to_string(&mut lib_file_text)?;
+    lib_file.read_to_string(&mut lib_file_text).unwrap();
 
     let lib_regex = Regex::new(r#"(?m)"\d"\n\s\{\n[\s\S]+?\}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
     let appid_regex = Regex::new(r#"(?m)\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
@@ -35,18 +50,31 @@ pub fn get_dota_path() -> Result<PathBuf, Box<dyn Error>> {
                 Some(path) => {
                     let lib_path_str = path.as_str();
                     let lib_path = Path::new(lib_path_str).canonicalize().unwrap();
-                    return Ok(lib_path.join("steamapps").join("common").join("dota 2 beta").join("game"))
-                },
-                None => return Err("Dota Installation not found.")?
+                    return Ok(lib_path
+                        .join("steamapps")
+                        .join("common")
+                        .join("dota 2 beta")
+                        .join("game"));
+                }
+                None => return Err(TMError::DotaNotFound),
             };
         };
     }
-    Err("Dota Installation not found.")?
+    Err(TMError::DotaNotFound)
 }
 
-// fn create_paths() -> Path {
-//     let dota_path = match get_dota_path() {
-//         Ok(path) => Path::new(&path),
-//         Err(_) => panic!(),
-//     };
-// }
+pub fn create_paths(_target: Terrains) -> Option<(PathBuf, PathBuf, PathBuf)> {
+    let dota_path: PathBuf = match get_dota_path() {
+        Ok(path) => Path::new(&path).to_path_buf(),
+        Err(_) => return None,
+    };
+
+    let base_path = dota_path.join("dota").join("maps").join("dota.vpk");
+    let target_path = dota_path.join("dota").join("maps").join("test.vpk");
+    let out_path = dota_path
+        .join("dota_tempcontent")
+        .join("maps")
+        .join("dota.vpk");
+
+    Some((base_path, target_path, out_path))
+}

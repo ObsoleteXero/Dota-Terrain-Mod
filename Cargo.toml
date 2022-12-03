@@ -9,3 +9,5 @@ edition = "2021"
 [dependencies]
 winreg = "0.10"
 regex = "1"
+crc = "3"
+md-5 = "0.10"
