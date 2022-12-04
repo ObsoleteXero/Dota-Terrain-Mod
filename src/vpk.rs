@@ -5,6 +5,8 @@ use std::{
     io::{BufRead, Cursor},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::mpsc,
+    thread,
 };
 
 use crc::{Crc, CRC_32_CKSUM};
@@ -67,6 +69,12 @@ impl VPK {
             data: vpk_cursor,
             files: HashMap::new(),
         }
+    }
+
+    fn read(&mut self) {
+        self.read_header();
+        self.populate_index();
+        self.load_file_data();
     }
 
     fn read_header(&mut self) {
@@ -160,7 +168,7 @@ impl VPK {
         }
     }
 
-    fn get_file_data(&mut self) {
+    fn load_file_data(&mut self) {
         for (path, metadata) in &self.index {
             let file_length = metadata.file_length + u32::from(metadata.preload_length);
 
@@ -182,7 +190,7 @@ impl VPK {
     }
 }
 
-fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) {
+fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) -> Vec<u8> {
     let mut tree: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
 
     // Create Tree using File List
@@ -308,15 +316,52 @@ fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) {
     file.append(&mut data_cursor.into_inner());
     file.append(&mut hashes);
 
-    std::fs::write("test.vpk", &file).unwrap();
+    file
 }
 
-pub fn testvpk() {
-    let mut vpk = VPK::new(std::path::PathBuf::from(
-        r"D:\Dev\Dota-Terrain-Mod\test\dota.vpk",
-    ));
-    vpk.read_header();
-    vpk.populate_index();
-    vpk.get_file_data();
-    create_vpk(vpk.files);
+fn patch_vpk(
+    base: HashMap<String, Vec<u8>>,
+    mut target: HashMap<String, Vec<u8>>,
+) -> HashMap<String, Vec<u8>> {
+    // Rename vmap_c in target to dota.vmap_c
+    let mut target_vmap = String::new();
+    for fpath in target.keys() {
+        if fpath.ends_with(".vmap_c") {
+            target_vmap.push_str(fpath);
+            break;
+        }
+    }
+    let vmap_data = target.remove(&target_vmap).unwrap();
+    target.insert(
+        Path::new(&target_vmap)
+            .with_file_name("dota.vmap_c")
+            .to_str()
+            .unwrap()
+            .to_string(),
+        vmap_data,
+    );
+
+    // Add files from base to target
+    for (fpath, data) in base {
+        if !target.contains_key(&fpath) {
+            target.insert(fpath, data);
+        }
+    }
+
+    target
+}
+
+pub fn create_terrain(base_path: PathBuf, target_path: PathBuf) -> Vec<u8> {
+    let (tx, rx) = mpsc::channel();
+    let mut base_vpk = VPK::new(base_path);
+    thread::spawn(move || {
+        let mut target_vpk = VPK::new(target_path);
+        target_vpk.read();
+        tx.send(target_vpk).unwrap();
+    });
+    let target_vpk = rx.recv().unwrap();
+    base_vpk.read();
+
+    let out_data = patch_vpk(base_vpk.files, target_vpk.files);
+    create_vpk(out_data)
 }
