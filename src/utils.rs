@@ -1,18 +1,13 @@
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use winreg::RegKey;
 
 enum TMError {
     SteamNotFound,
     DotaNotFound,
-    UnknownError,
-}
-
-pub enum Terrains {
-    Img,
+    GenericError,
 }
 
 fn get_steam_path() -> Result<String, TMError> {
@@ -35,7 +30,7 @@ fn get_dota_path() -> Result<PathBuf, TMError> {
 
     let mut lib_file = match File::open(&library_folders) {
         Ok(file) => file,
-        Err(_) => return Err(TMError::UnknownError),
+        Err(_) => return Err(TMError::GenericError),
     };
     let mut lib_file_text = String::new();
     lib_file.read_to_string(&mut lib_file_text).unwrap();
@@ -63,14 +58,14 @@ fn get_dota_path() -> Result<PathBuf, TMError> {
     Err(TMError::DotaNotFound)
 }
 
-pub fn create_paths(_target: Terrains) -> Option<(PathBuf, PathBuf, PathBuf)> {
+pub fn create_paths(target: &str) -> Option<(PathBuf, PathBuf, PathBuf)> {
     let dota_path: PathBuf = match get_dota_path() {
         Ok(path) => Path::new(&path).to_path_buf(),
         Err(_) => return None,
     };
 
     let base_path = dota_path.join("dota").join("maps").join("dota.vpk");
-    let target_path = dota_path.join("dota").join("maps").join("test.vpk");
+    let target_path = dota_path.join("dota").join("maps").join(target);
     let out_path = dota_path
         .join("dota_tempcontent")
         .join("maps")
