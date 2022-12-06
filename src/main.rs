@@ -32,7 +32,7 @@ fn get_selection() -> &'static str {
     let selection: i32 = selection.trim().parse().expect("Invalid input.");
     if terrains.contains_key(&selection) {
         let terrain = terrains.get(&selection).unwrap();
-        println!("Selected: {}", terrain.0);
+        println!("Selected: {}. Applying terrain...", terrain.0);
         return terrain.1;
     } else {
         eprintln!("Invalid selection.");
@@ -41,6 +41,7 @@ fn get_selection() -> &'static str {
 }
 
 fn main() {
+    println!("-- Dota Terrain Mod (https://github.com/ObsoleteXero/Dota-Terrain-Mod) --\n");
     let terrain = get_selection();
     let (base_path, target_path, out_path) = utils::create_paths(terrain).unwrap();
 
@@ -49,7 +50,7 @@ fn main() {
     std::fs::create_dir_all(out_path.parent().unwrap()).unwrap();
     std::fs::write(out_path, &out_file).unwrap();
 
-    println!(
-        "Applied selected terrain. Launch Dota 2 with the \"-language tempcontent\" launch option"
-    );
+    println!("Done. Launch Dota 2 with the \"-language tempcontent\" launch option.");
+    println!("\nPress any key to exit.");
+    utils::pause();
 }

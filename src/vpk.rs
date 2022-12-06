@@ -15,7 +15,7 @@ use md5::{Digest, Md5};
 const HEADER_LENGTH: usize = 28;
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_CKSUM);
 
-pub struct VPK {
+struct VPK {
     path: PathBuf,
     data: Cursor<Vec<u8>>,
     header: Option<VPKHeader>,
@@ -41,6 +41,24 @@ struct VPKMetadata {
     archive_offset: u32,
     file_length: u32,
     suffix: u16,
+}
+
+impl VPKHeader {
+    fn new(header_data: Vec<u32>) -> VPKHeader {
+        let signature = header_data[0];
+        if signature != 0x55aa1234 {
+            panic!("Invalid VPK");
+        }
+        VPKHeader {
+            signature,
+            version: header_data[1],
+            tree_length: header_data[2],
+            embed_chunk_length: header_data[3],
+            chunk_hashes_length: header_data[4],
+            self_hashes_length: header_data[5],
+            signature_length: header_data[6],
+        }
+    }
 }
 
 impl VPKMetadata {
@@ -85,20 +103,7 @@ impl VPK {
             .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
             .collect();
 
-        let signature = header_data[0];
-        if signature != 0x55aa1234 {
-            panic!("Invalid VPK");
-        }
-
-        self.header = Some(VPKHeader {
-            signature,
-            version: header_data[1],
-            tree_length: header_data[2],
-            embed_chunk_length: header_data[3],
-            chunk_hashes_length: header_data[4],
-            self_hashes_length: header_data[5],
-            signature_length: header_data[6],
-        });
+        self.header = Some(VPKHeader::new(header_data));
     }
 
     fn populate_index(&mut self) {
@@ -231,7 +236,7 @@ fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) -> Vec<u8> {
 
     // Create File Structure
     let mut tree_cursor = Cursor::new(Vec::new());
-    let mut data_offset: u32 = tree_length + HEADER_LENGTH as u32; // HEADER_LENGTH + tree_length
+    let mut data_offset: u32 = tree_length + HEADER_LENGTH as u32;
     let mut data_cursor = Cursor::new(Vec::new());
     let mut embed_chunk_length: u32 = 0;
 

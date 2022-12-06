@@ -73,3 +73,7 @@ pub fn create_paths(target: &str) -> Option<(PathBuf, PathBuf, PathBuf)> {
 
     Some((base_path, target_path, out_path))
 }
+
+pub fn pause() {
+    std::io::stdin().read(&mut [0_u8]).unwrap();
+}
