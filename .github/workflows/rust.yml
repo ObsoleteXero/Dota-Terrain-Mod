@@ -14,16 +14,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy: 
       matrix:
-        os: [ windows-latest ]
+        rust: [ stable ]
+        os: [ x86_64-pc-windows-gnu ]
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Run Tests
-      run: cargo test --verbose
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ matrix.rust }}
+        targets: ${{ matrix.os }}
 
     - name: Build Binaries
-      run: cargo build --release
+      run: cargo build --release --target ${{ matrix.os }} --verbose
+
+    - name: Run Tests
+      run: cargo test --verbose
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
