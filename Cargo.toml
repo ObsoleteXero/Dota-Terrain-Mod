@@ -3,11 +3,17 @@ name = "dota-terrain-mod"
 version = "0.1.0"
 authors = ["ObsoleteXero"]
 edition = "2021"
+repository = "https://github.com/ObsoleteXero/Dota-Terrain-Mod"
+license = "MIT"
+license-file = "LICENSE"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-winreg = "0.10"
 regex = "1"
 crc = "3"
 md-5 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.10"

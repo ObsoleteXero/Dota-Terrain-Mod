@@ -3,20 +3,39 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags: 
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    strategy: 
+      matrix:
+        os: [ windows-latest ]
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
+
+    - name: Run Tests
       run: cargo test --verbose
+
+    - name: Build Binaries
+      run: cargo build --release
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          Changes in this Release...
+        draft: true
+        prerelease: false
+        files: |
+          target/release/dota-terrain-mod.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
