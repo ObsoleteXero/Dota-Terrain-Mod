@@ -42,8 +42,17 @@ fn get_selection() -> &'static str {
 
 fn main() {
     println!("-- Dota Terrain Mod (https://github.com/ObsoleteXero/Dota-Terrain-Mod) --\n");
+    let mut dota = utils::Dota::new();
+    if dota.dota_path.is_none() {
+        eprintln!("A dota installation could not be detected. Program will exit.");
+        std::process::exit(1);
+    }
     let terrain = get_selection();
-    let (base_path, target_path, out_path) = utils::create_paths(terrain).unwrap();
+    dota.build_paths(terrain);
+
+    let base_path = dota.base_path.unwrap();
+    let target_path = dota.target_path.unwrap();
+    let out_path = dota.out_path.unwrap();
 
     let out_file = vpk::create_terrain(base_path, target_path);
 
