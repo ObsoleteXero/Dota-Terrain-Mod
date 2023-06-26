@@ -15,27 +15,54 @@ use md5::{Digest, Md5};
 const HEADER_LENGTH: usize = 28;
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_CKSUM);
 
+/// Object representing a VPK file
+/// # Properties
+/// - `path: PathBuf` = Path to the VPK file on disk
+/// - `data: Cursor<Vec<u8>>` = Data in the VPK file as vector of bytes
+/// - `header: Option<VPKHeader>` = The header of the VPK file. Initially None, until `read_header() is called`
+/// - `index: HashMap<String, VPKMetadata>` = HashMap containing the path to each file in the VPK, and its respective metadata
+/// - `files: HashMap<String, Vec<u8>>` = HashMap containing the path to each file in the VPK, and the file itself as a Vector of bytes
 struct VPK {
-    path: PathBuf,
+    _path: PathBuf,
     data: Cursor<Vec<u8>>,
     header: Option<VPKHeader>,
     index: HashMap<String, VPKMetadata>,
     files: HashMap<String, Vec<u8>>,
 }
 
+/// Object representing the header of a VPK file. The expected header length is 28 bytes,
+/// and is the first 28 bytes of a VPK file. Each property is 4 bytes.
+/// # Properties
+/// - `signature: u32` = Expected signature for a valid VPK is 0x55aa1234
+/// - `version: u32` = VPK Version. This program expects VPK Version 2.
+/// - `tree_length: u32` = Determined by the number of files, per root directory,
+/// per file extension in the VPK.
+/// - `embed_chunk_length: u32`
+/// - `chunk_hashes_length: u32`
+/// - `self_hashes_length: u32`
+/// - `signature_length: u32`
 struct VPKHeader {
-    signature: u32,
+    _signature: u32,
     version: u32,
     tree_length: u32,
-    embed_chunk_length: u32,
-    chunk_hashes_length: u32,
-    self_hashes_length: u32,
-    signature_length: u32,
+    _embed_chunk_length: u32,
+    _chunk_hashes_length: u32,
+    _self_hashes_length: u32,
+    _signature_length: u32,
 }
 
+/// Object representing the metadata for each file inside a VPK file.
+/// # Properties
+/// - `preload: Vec<u8>`
+/// - `crc32: u32` = CRC32 checksum of the file
+/// - `preload_length: u16`
+/// - `archive_index: u16`
+/// - `archive_offset: u32` = Starting position of the file in the VPK file.
+/// - `file_length: u32` = Size of the file in bits
+/// - `suffix: u16`
 struct VPKMetadata {
-    preload: Vec<u8>,
-    crc32: u32,
+    _preload: Vec<u8>,
+    _crc32: u32,
     preload_length: u16,
     archive_index: u16,
     archive_offset: u32,
@@ -44,24 +71,30 @@ struct VPKMetadata {
 }
 
 impl VPKHeader {
+
+    /// Create a new `VPKHeader` from a 28 byte array containing the header data
+    /// Panics if the signature is not `0x55aa1234`
     fn new(header_data: Vec<u32>) -> VPKHeader {
         let signature = header_data[0];
         if signature != 0x55aa1234 {
             panic!("Invalid VPK");
         }
         VPKHeader {
-            signature,
+            _signature: signature,
             version: header_data[1],
             tree_length: header_data[2],
-            embed_chunk_length: header_data[3],
-            chunk_hashes_length: header_data[4],
-            self_hashes_length: header_data[5],
-            signature_length: header_data[6],
+            _embed_chunk_length: header_data[3],
+            _chunk_hashes_length: header_data[4],
+            _self_hashes_length: header_data[5],
+            _signature_length: header_data[6],
         }
     }
 }
 
 impl VPKMetadata {
+
+    /// Validate `VPKMetadata` object by checking the header
+    /// and updating `archive_offset` as necessary.
     fn validate(&mut self, header: &VPKHeader) {
         if self.suffix != 65535 {
             panic!("Error while parsing index.");
@@ -73,6 +106,8 @@ impl VPKMetadata {
 }
 
 impl VPK {
+
+    /// Create a new `VPK` object from a file on disk
     fn new(path: PathBuf) -> VPK {
         // Open file and load bytes
         let mut f = File::open(&path).unwrap();
@@ -81,7 +116,7 @@ impl VPK {
         let vpk_cursor = Cursor::new(vpk_data);
 
         VPK {
-            path,
+            _path: path,
             header: None,
             index: HashMap::new(),
             data: vpk_cursor,
@@ -89,12 +124,14 @@ impl VPK {
         }
     }
 
+    /// Read the file into memory and fully populate the object attributes
     fn read(&mut self) {
         self.read_header();
         self.populate_index();
         self.load_file_data();
     }
 
+    /// Read the header of the VPK file and populate the relevant attributes
     fn read_header(&mut self) {
         let mut header = [b'0'; HEADER_LENGTH];
         self.data.read_exact(&mut header).unwrap();
@@ -106,8 +143,10 @@ impl VPK {
         self.header = Some(VPKHeader::new(header_data));
     }
 
+    /// Read the index of file within the VPK and create an index of file path and
+    /// metadata for each file
     fn populate_index(&mut self) {
-        self.data.set_position(HEADER_LENGTH.try_into().unwrap());
+        self.data.set_position(HEADER_LENGTH as u64);
         let header = self.header.as_ref().unwrap();
 
         loop {
@@ -118,7 +157,7 @@ impl VPK {
             }
             let mut cstr = Vec::new();
             self.data.read_until(b'\x00', &mut cstr).unwrap();
-            let Ok(ext) = CString::from_vec_with_nul(cstr) else {return};
+            let Ok(ext) = CString::from_vec_with_nul(cstr) else { return; };
             if &ext.to_str().unwrap() == &"" {
                 break;
             };
@@ -126,7 +165,7 @@ impl VPK {
             loop {
                 let mut cstr = Vec::new();
                 self.data.read_until(b'\x00', &mut cstr).unwrap();
-                let Ok(mut path) = CString::from_vec_with_nul(cstr) else {return};
+                let Ok(mut path) = CString::from_vec_with_nul(cstr) else { return; };
                 if &path.to_str().unwrap() == &"" {
                     break;
                 };
@@ -139,7 +178,7 @@ impl VPK {
                 loop {
                     let mut cstr = Vec::new();
                     self.data.read_until(b'\x00', &mut cstr).unwrap();
-                    let Ok(name) = CString::from_vec_with_nul(cstr) else {return};
+                    let Ok(name) = CString::from_vec_with_nul(cstr) else { return; };
                     if &name.to_str().unwrap() == &"" {
                         break;
                     };
@@ -157,8 +196,8 @@ impl VPK {
                     self.data.read_exact(&mut preload).unwrap();
 
                     let mut meta = VPKMetadata {
-                        preload,
-                        crc32: u32::from_le_bytes(metadata[0..4].try_into().unwrap()),
+                        _preload: preload,
+                        _crc32: u32::from_le_bytes(metadata[0..4].try_into().unwrap()),
                         preload_length,
                         archive_index: u16::from_le_bytes(metadata[6..8].try_into().unwrap()),
                         archive_offset: u32::from_le_bytes(metadata[8..12].try_into().unwrap()),
@@ -173,6 +212,7 @@ impl VPK {
         }
     }
 
+    /// Use the created file path, metadata pairs to load the contents of each file into memory
     fn load_file_data(&mut self) {
         for (path, metadata) in &self.index {
             let file_length = metadata.file_length + u32::from(metadata.preload_length);
@@ -184,17 +224,27 @@ impl VPK {
         }
     }
 
-    fn save_file_data(&self) {
+    /// Save extracted files in tree to Disk
+    /// # Parameters
+    /// - `save_dir: &Path` = Base directory to save the files in
+    /// # Example
+    /// ```rs
+    /// let out_path = Path::new("%USERPROFILE%/Desktop/MyVPK")
+    /// VPK._save_file_data(out_path)
+    /// ```
+    fn _save_file_data(&self, save_dir: &Path) {
         for (path, file_data) in &self.files {
-            let fpath = Path::new(path);
+            let fpath = save_dir.join(Path::new(path));
             let fparent = fpath.parent().unwrap();
             create_dir_all(fparent).unwrap();
-
             std::fs::write(fpath, file_data).unwrap();
         }
     }
 }
 
+/// Create a Vector containing the bytes of a compiled VPK file containing the data given
+/// as `vpk_data` in the form of a HashMap containing the file path and
+/// binary data of each file.
 fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) -> Vec<u8> {
     let mut tree: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
 
@@ -324,6 +374,10 @@ fn create_vpk(vpk_data: HashMap<String, Vec<u8>>) -> Vec<u8> {
     file
 }
 
+/// Patch the target VPK with files from the base VPK. The `vmap_c` file in the target is
+/// renamed to `dota.vmap_c` and retained. Files from the base VPK which are not found in the
+/// target VPK will be added to the target. Returns the patched target VPK as a HashMap
+/// containing the file paths and binary file data for each file within.
 fn patch_vpk(
     base: HashMap<String, Vec<u8>>,
     mut target: HashMap<String, Vec<u8>>,
@@ -356,6 +410,11 @@ fn patch_vpk(
     target
 }
 
+/// Unpacks the base terrain (`dota.vpk`) given as `base_path` and the custom terrain given
+/// as `target_path`. Unpacking occurs in parallel via multi-processing.
+/// Patches the the target file with the base data in `dota.vpk`
+/// Creates a VPK file using the patched data, and returns the vector containing the binary data
+/// for the resulting VPK.
 pub fn create_terrain(base_path: PathBuf, target_path: PathBuf) -> Vec<u8> {
     let (tx, rx) = mpsc::channel();
     let mut base_vpk = VPK::new(base_path);
@@ -364,8 +423,8 @@ pub fn create_terrain(base_path: PathBuf, target_path: PathBuf) -> Vec<u8> {
         target_vpk.read();
         tx.send(target_vpk).unwrap();
     });
-    let target_vpk = rx.recv().unwrap();
     base_vpk.read();
+    let target_vpk = rx.recv().unwrap();
 
     let out_data = patch_vpk(base_vpk.files, target_vpk.files);
     create_vpk(out_data)

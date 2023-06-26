@@ -10,6 +10,9 @@ pub mod utils {
         DotaNotFound,
         GenericError,
     }
+
+    /// Object representing a dota installation. Exists to encapsulate the paths and identify
+    /// if `dota_path` cannot be found
     pub struct Dota {
         pub(crate) dota_path: Option<PathBuf>,
         pub(crate) base_path: Option<PathBuf>,
@@ -18,6 +21,9 @@ pub mod utils {
     }
 
     impl Dota {
+
+        /// On initialization of a `Dota` instance, tries to locate the dota installation and
+        /// sets the attribute accordingly
         pub(crate) fn new() -> Self {
             let dota_path = match get_steam_path() {
                 Ok(steam_path) => {
@@ -42,6 +48,9 @@ pub mod utils {
             }
         }
 
+        /// Using the `dota_path` which is assumed to exist if this function is called,
+        /// populate the other attributes by creating the paths to the base `dota.vpk`,
+        /// the given target terrain vpk, and the file path where the output vpk will be written
         pub(crate) fn build_paths(&mut self, target: &str) {
             let dota_path = &self.dota_path.as_ref().unwrap();
             let base_path = get_base_path(dota_path);
@@ -83,7 +92,8 @@ pub mod utils {
         };
     }
 
-    /// Given the contents of `libraryfolders.vdf`, returns the path to the dota installation directory.
+    /// Given the contents of `libraryfolders.vdf`, returns the path to the dota installation
+    /// directory.
     fn get_dota_path(lib_file: String) -> Result<PathBuf, TMError> {
         let lib_regex = Regex::new(r#"(?m)"\d"\n\s\{\n[\s\S]+?}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
         let appid_regex = Regex::new(r#"(?m)\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
