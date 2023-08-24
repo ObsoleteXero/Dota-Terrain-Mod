@@ -1,3 +1,4 @@
+use crate::utils::Dota;
 use std::collections::HashMap;
 use std::io;
 
@@ -42,11 +43,13 @@ fn get_selection() -> &'static str {
 
 fn main() {
     println!("-- Dota Terrain Mod (https://github.com/ObsoleteXero/Dota-Terrain-Mod) --\n");
-    let mut dota = utils::Dota::new();
-    if dota.dota_path.is_none() {
-        eprintln!("A dota installation could not be detected. Program will exit.");
-        std::process::exit(1);
-    }
+    let mut dota = match Dota::new() {
+        Ok(dota) => dota,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
     let terrain = get_selection();
     dota.build_paths(terrain);
 
