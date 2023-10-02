@@ -18,7 +18,13 @@ pub mod utils {
 
     impl Display for TMError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Dota-Terrain-Mod has encountered an error.")
+            match self {
+                TMError::SteamNotFound => write!(f, "Dota-Terrain-Mod error: Steam not found"),
+                TMError::DotaNotFound => write!(f, "Dota-Terrain-Mod error: Dota not found"),
+                TMError::InternalError(io_err) => {
+                    write!(f, "Dota-Terrain-Mod error: Internal error: {}", io_err)
+                }
+            }
         }
     }
 
@@ -80,7 +86,17 @@ pub mod utils {
     #[cfg(target_os = "linux")]
     /// Send default Steam config location on linux
     fn get_steam_path() -> Result<PathBuf, TMError> {
-        let steam_path = PathBuf::from("~/.local/share/Steam/config/libraryfolders.vdf");
+        let homedir = match std::env::var("HOME") {
+            Ok(home) => PathBuf::from(home),
+            Err(_) => {
+                return Err(TMError::InternalError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Home directory not found",
+                )))
+            }
+        };
+        let steam_path =
+            PathBuf::from(homedir).join(".local/share/Steam/config/libraryfolders.vdf");
         if steam_path.exists() {
             return Ok(steam_path);
         }
