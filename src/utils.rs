@@ -5,6 +5,8 @@ pub mod utils {
     use std::fs;
     use std::io::Read;
     use std::path::{Path, PathBuf};
+
+    #[cfg(target_os = "windows")]
     use winreg::RegKey;
 
     #[derive(Debug)]
@@ -62,6 +64,7 @@ pub mod utils {
         }
     }
 
+    #[cfg(target_os = "windows")]
     /// Reads the windows registry and returns the Steam installation directory
     fn get_steam_path() -> Result<PathBuf, TMError> {
         let hkcu = RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
@@ -74,11 +77,25 @@ pub mod utils {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    /// Send default Steam config location on linux
+    fn get_steam_path() -> Result<PathBuf, TMError> {
+        let steam_path = PathBuf::from("~/.local/share/Steam/config/libraryfolders.vdf");
+        if steam_path.exists() {
+            return Ok(steam_path);
+        }
+        return Err(TMError::SteamNotFound);
+    }
+
     /// Given the Steam installation path, return the contents of `libraryfolders.vdf`
     fn load_libraries(steam_path: PathBuf) -> Result<String, TMError> {
+        #[cfg(target_os = "windows")]
         let library_folders = Path::new(&steam_path)
             .join("steamapps")
             .join("libraryfolders.vdf");
+
+        #[cfg(target_os = "linux")]
+        let library_folders = steam_path;
 
         fs::read_to_string(library_folders).map_err(|_| TMError::SteamNotFound)
     }
