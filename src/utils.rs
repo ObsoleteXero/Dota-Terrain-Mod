@@ -88,10 +88,10 @@ pub mod utils {
     fn get_steam_path() -> Result<PathBuf, TMError> {
         let homedir = match std::env::var("HOME") {
             Ok(home) => PathBuf::from(home),
-            Err(_) => {
+            Err(err) => {
                 return Err(TMError::InternalError(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "Home directory not found",
+                    err,
                 )))
             }
         };
@@ -119,9 +119,9 @@ pub mod utils {
     /// Given the contents of `libraryfolders.vdf`, returns the path to the dota installation
     /// directory.
     fn get_dota_path(lib_file: String) -> Result<PathBuf, TMError> {
-        let lib_regex = Regex::new(r#"(?m)"\d"\n\s\{\n[\s\S]+?}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
-        let appid_regex = Regex::new(r#"(?m)\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
-        let path_regex = Regex::new(r#"(?m)"(\w+:\\\\.+)"\n"#).unwrap(); // "(\w+:\\\\.+)"\n
+        let lib_regex = Regex::new(r#"\d"\n\s\{\n[\s\S]+?}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
+        let appid_regex = Regex::new(r#"\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
+        let path_regex = Regex::new(r#"(\w+:\\\\[^"]+|/[^"]+)"#).unwrap(); // (\w+:\\\\[^"]+|/[^"]+)
 
         for lib in lib_regex.captures_iter(&lib_file) {
             if appid_regex.is_match(&lib[0]) {
