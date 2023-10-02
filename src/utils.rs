@@ -5,6 +5,8 @@ pub mod utils {
     use std::fs;
     use std::io::Read;
     use std::path::{Path, PathBuf};
+
+    #[cfg(target_os = "windows")]
     use winreg::RegKey;
 
     #[derive(Debug)]
@@ -16,7 +18,13 @@ pub mod utils {
 
     impl Display for TMError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Dota-Terrain-Mod has encountered an error.")
+            match self {
+                TMError::SteamNotFound => write!(f, "Dota-Terrain-Mod error: Steam not found"),
+                TMError::DotaNotFound => write!(f, "Dota-Terrain-Mod error: Dota not found"),
+                TMError::InternalError(io_err) => {
+                    write!(f, "Dota-Terrain-Mod error: Internal error: {}", io_err)
+                }
+            }
         }
     }
 
@@ -62,6 +70,7 @@ pub mod utils {
         }
     }
 
+    #[cfg(target_os = "windows")]
     /// Reads the windows registry and returns the Steam installation directory
     fn get_steam_path() -> Result<PathBuf, TMError> {
         let hkcu = RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
@@ -74,11 +83,35 @@ pub mod utils {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    /// Send default Steam config location on linux
+    fn get_steam_path() -> Result<PathBuf, TMError> {
+        let homedir = match std::env::var("HOME") {
+            Ok(home) => PathBuf::from(home),
+            Err(err) => {
+                return Err(TMError::InternalError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    err,
+                )))
+            }
+        };
+        let steam_path =
+            PathBuf::from(homedir).join(".local/share/Steam/config/libraryfolders.vdf");
+        if steam_path.exists() {
+            return Ok(steam_path);
+        }
+        return Err(TMError::SteamNotFound);
+    }
+
     /// Given the Steam installation path, return the contents of `libraryfolders.vdf`
     fn load_libraries(steam_path: PathBuf) -> Result<String, TMError> {
+        #[cfg(target_os = "windows")]
         let library_folders = Path::new(&steam_path)
             .join("steamapps")
             .join("libraryfolders.vdf");
+
+        #[cfg(target_os = "linux")]
+        let library_folders = steam_path;
 
         fs::read_to_string(library_folders).map_err(|_| TMError::SteamNotFound)
     }
@@ -86,9 +119,9 @@ pub mod utils {
     /// Given the contents of `libraryfolders.vdf`, returns the path to the dota installation
     /// directory.
     fn get_dota_path(lib_file: String) -> Result<PathBuf, TMError> {
-        let lib_regex = Regex::new(r#"(?m)"\d"\n\s\{\n[\s\S]+?}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
-        let appid_regex = Regex::new(r#"(?m)\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
-        let path_regex = Regex::new(r#"(?m)"(\w+:\\\\.+)"\n"#).unwrap(); // "(\w+:\\\\.+)"\n
+        let lib_regex = Regex::new(r#"\d"\n\s\{\n[\s\S]+?}\n\s}"#).unwrap(); // "\d"\n\s\{\n[\s\S]+?\}\n\s}
+        let appid_regex = Regex::new(r#"\t{3}"570"\t{2}"\d+"\n"#).unwrap(); // \t{3}"570"\t{2}"\d+"\n
+        let path_regex = Regex::new(r#"(\w+:\\\\[^"]+|/[^"]+)"#).unwrap(); // (\w+:\\\\[^"]+|/[^"]+)
 
         for lib in lib_regex.captures_iter(&lib_file) {
             if appid_regex.is_match(&lib[0]) {
